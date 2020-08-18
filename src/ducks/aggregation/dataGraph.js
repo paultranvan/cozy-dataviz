@@ -2,31 +2,39 @@ import { Index } from 'pondjs'
 import { QueryTimeSerie } from './queries'
 import { AGG_BY_DAY, AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR } from './consts'
 
-const timeInterval = aggregationLevel => {
+const groupByDate = (date, aggregationLevel) => {
   if (aggregationLevel === AGG_BY_DAY) {
-    return '1d'
+    return Index.getDailyIndexString(date)
   }
   if (aggregationLevel === AGG_BY_WEEK) {
-    return '1w'
+    return Index.getIndexString('7d', date)
   }
   if (aggregationLevel === AGG_BY_MONTH) {
-    return '1m'
+    return Index.getMonthlyIndexString(date)
   }
   if (aggregationLevel === AGG_BY_YEAR) {
-    return '1y'
+    return Index.getYearlyIndexString(date)
   }
   return null
 }
 
-export const loadDataGraph = ({ dataType, aggregationLevel }) => {
+export const loadDataGraph = ({
+  dataType,
+  aggregationLevel,
+  startDate,
+  endDate
+}) => {
   const data = QueryTimeSerie({
     type: dataType,
-    aggregationLevel
+    aggregationLevel,
+    startDate,
+    endDate
   })
-  const interval = timeInterval(aggregationLevel)
-  return data && interval
+  return data
     ? data.map(point => {
-        return [Index.getIndexString(interval, new Date(point.date)), point.sum]
+        const timeIndex = groupByDate(new Date(point.date), aggregationLevel)
+        const value = point.sum
+        return [timeIndex, value]
       })
     : null
 }

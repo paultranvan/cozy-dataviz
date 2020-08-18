@@ -4,9 +4,9 @@ import Graph from 'components/Graph'
 
 const App = () => {
   return (
-    <div>
-      <h1>Coucou</h1>
-      <Graph dataType="electricity" aggregationLevel="byMonth" />
+    <div align="center">
+      <h1>Energy consumption</h1>
+      <Graph dataType="electricity" aggregationLevel="byYear" />
     </div>
   )
 }
