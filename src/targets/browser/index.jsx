@@ -3,6 +3,7 @@
 import 'styles'
 
 import React from 'react'
+import { Provider } from 'react-redux'
 import CozyClient, { CozyProvider } from 'cozy-client'
 import { render } from 'react-dom'
 import { I18n } from 'cozy-ui/react/I18n'
@@ -13,6 +14,7 @@ import 'cozy-ui/dist/cozy-ui.utils.min.css'
 
 let appLocale
 const renderApp = function(client) {
+  client.ensureStore()
   const App = require('components/App').default
   render(
     <I18n
@@ -20,9 +22,11 @@ const renderApp = function(client) {
       dictRequire={appLocale => require(`locales/${appLocale}`)}
     >
       <CozyProvider client={client}>
-        <BreakpointsProvider>
-          <App />
-        </BreakpointsProvider>
+        <Provider store={client.store}>
+          <BreakpointsProvider>
+            <App />
+          </BreakpointsProvider>
+        </Provider>
       </CozyProvider>
     </I18n>,
     document.querySelector('[role=application]')
