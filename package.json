@@ -50,9 +50,11 @@
     "cozy-ui": "35.23.0",
     "date-fns": "^2.15.0",
     "plotly.js": "^1.54.7",
+    "pondjs": "^0.9.0",
     "react": "16.8.1",
     "react-dom": "16.8.1",
     "react-plotly.js": "^2.4.0",
-    "react-router-dom": "4.3.1"
+    "react-router-dom": "4.3.1",
+    "react-timeseries-charts": "^0.16.1"
   }
 }
