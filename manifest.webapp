@@ -37,7 +37,9 @@
       "type": "io.mocks.todos"
     },
     "time series": {
-      "type": "io.cozy.timeseries.*"
+      "description": "Unleash the time series power",
+      "type": "io.cozy.timeseries.*",
+      "verbs": ["GET"]
     }
   }
 }
