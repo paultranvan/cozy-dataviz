@@ -1,54 +1,62 @@
 import React from 'react'
-import Plot from 'react-plotly.js'
-import { Query } from 'cozy-client'
+import { TimeSeries } from 'pondjs'
+import {
+  Resizable,
+  Charts,
+  ChartContainer,
+  ChartRow,
+  YAxis,
+  BarChart,
+  styler
+} from 'react-timeseries-charts'
+import { loadDataGraph } from '../ducks/aggregation/dataGraph'
 
+const Graph = ({ dataType, aggregationLevel }) => {
+  const points = loadDataGraph({ dataType, aggregationLevel })
+  if (!points || points.length < 1) {
+    return null
+  }
 
-// const query = client =>
-//   client
-//     .all(DOCTYPE_TS)
-//     .where({
-//       _id: {
-//         $gt: null
-//       }
-//     })
-//     .indexFields(['_id'])
+  const series = new TimeSeries({
+    name: `${dataType} ${aggregationLevel}`,
+    columns: ['index', dataType],
+    points
+  })
 
-const Graph = ({}) => {
-  return(
-    <Plot
-      data={[
-        {
-          x: [1, 2, 3],
-          y: [2, 6, 3],
-          type: 'scatter',
-          mode: 'lines+markers',
-          marker: {color: 'red'},
-        },
-        {type: 'bar', x: [1, 2, 3], y: [2, 5, 3]},
-      ]}
-      layout={ { title: 'A Fancy Plot'} }
-    />
+  const style = styler([
+    {
+      key: dataType,
+      color: '#A5C8E1',
+      selected: '#2CB1CF'
+    }
+  ])
+  const maxValue = Math.max(...points.map(p => p[1]))
+  console.log('max value : ', maxValue)
+  return (
+    <ChartContainer timeRange={series.range()}>
+      <ChartRow height="150">
+        <YAxis
+          id={dataType}
+          format=".5"
+          min={0}
+          max={maxValue}
+          label="Kw/h"
+          width="70"
+          type="linear"
+        />
+        <Charts>
+          <BarChart
+            axis={dataType}
+            style={style}
+            spacing={1}
+            columns={[dataType]}
+            series={series}
+            minBarHeight={1}
+          />
+        </Charts>
+      </ChartRow>
+    </ChartContainer>
   )
 }
-/*
-class App extends React.Component {
-  render() {
-    return (
-      <Plot
-        data={[
-          {
-            x: [1, 2, 3],
-            y: [2, 6, 3],
-            type: 'scatter',
-            mode: 'lines+markers',
-            marker: {color: 'red'},
-          },
-          {type: 'bar', x: [1, 2, 3], y: [2, 5, 3]},
-        ]}
-        layout={ {width: 320, height: 240, title: 'A Fancy Plot'} }
-      />
-    )
-  }
-}
-*/
+
 export default Graph
