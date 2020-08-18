@@ -16,6 +16,13 @@ import {
   AGG_BY_YEAR
 } from '../../ducks/aggregation/consts'
 
+const mapAggregationLevelToFunc = {
+  [AGG_BY_DAY]: differenceInCalendarDays,
+  [AGG_BY_WEEK]: differenceInCalendarWeeks,
+  [AGG_BY_MONTH]: differenceInCalendarMonths,
+  [AGG_BY_YEAR]: differenceInCalendarYears
+}
+
 /* 
   Determine which min agg level should be run.
 
@@ -23,7 +30,7 @@ import {
     - the start / end dates interval is less than a day, OR
     - the start / second dates interval is 1 (suppose completeness)
 */
-const minAggLevel = dataseries => {
+const minAggregationLevel = dataseries => {
   const startDate = parseISO(dataseries.startDate)
   const endDate = parseISO(dataseries.endDate)
   const secondDate = parseISO(dataseries.dates[1])
@@ -49,8 +56,14 @@ const minAggLevel = dataseries => {
   return AGG_BY_YEAR
 }
 
-const applyAggregation = (dataseries, compareIntervalFct) => {
-  const agg = dataseries.series.map(serie => {
+/*
+  Apply aggregation functions on data series. The given interval function
+  is used to determine how to group data: per week, month, etc.
+*/
+const applyAggregation = (dataseries, aggLevel, dbSource, dataSource) => {
+  const compareIntervalFct = mapAggregationLevelToFunc[aggLevel]
+  console.log('compare interval fct : ', compareIntervalFct)
+  return dataseries.series.map(serie => {
     const aggSerie = {}
     let sum = 0
     let count = 0
@@ -60,7 +73,10 @@ const applyAggregation = (dataseries, compareIntervalFct) => {
         aggSerie[formatISO(currDateAgg)] = {
           sum,
           count,
-          type: serie.type
+          type: serie.type,
+          aggregationLevel: aggLevel,
+          dbSource,
+          dataSource
         }
         sum = 0
         count = 0
@@ -71,28 +87,40 @@ const applyAggregation = (dataseries, compareIntervalFct) => {
     }
     return aggSerie
   })
-  console.log('agg : ', agg)
 }
 
-const aggSeries = dataseries => {
-  const aggLevel = minAggLevel(dataseries)
+/*
+  Aggregate data series on the computed times intervals
+*/
+const aggregateSeries = doc => {
+  const minAggLevel = minAggregationLevel(doc.dataseries)
   const aggregationRuns = {
-    [AGG_BY_DAY]: [
-      differenceInCalendarDays,
-      differenceInCalendarWeeks,
-      differenceInCalendarMonths,
-      differenceInCalendarYears
-    ],
-    [AGG_BY_WEEK]: [
-      differenceInCalendarWeeks,
-      differenceInCalendarMonths,
-      differenceInCalendarYears
-    ],
-    [AGG_BY_MONTH]: [differenceInCalendarMonths, differenceInCalendarYears],
-    [AGG_BY_YEAR]: [differenceInCalendarYears]
+    [AGG_BY_DAY]: [AGG_BY_DAY, AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR],
+    [AGG_BY_WEEK]: [AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR],
+    [AGG_BY_MONTH]: [AGG_BY_MONTH, AGG_BY_YEAR],
+    [AGG_BY_YEAR]: AGG_BY_YEAR
   }
-  aggregationRuns[aggLevel].forEach(diffFct => {
-    applyAggregation(dataseries, diffFct)
+  return aggregationRuns[minAggLevel].map(aggLevel =>
+    applyAggregation(doc.dataseries, aggLevel, doc.dbSource, doc.dataSource)
+  )
+}
+
+const saveAggregations = async (client, aggregatedSeries) => {
+  console.log('aggs : ', aggregatedSeries)
+  aggregatedSeries.forEach(singleAggregationSeries => {
+    singleAggregationSeries.forEach(singleAgg => {
+      const dates = Object.keys(singleAgg)
+      dates.map(date => {
+        const docAgg = {
+          date,
+          ...singleAgg[date]
+        }
+        client.save({
+          _type: 'io.cozy.timeseries',
+          ...docAgg
+        })
+      })
+    })
   })
 }
 
@@ -124,10 +152,10 @@ const main = async () => {
   })
 
   const aggDocs = await client.queryAll(aggDocsQ)
-  console.log('agg docs : ', aggDocs)
   if (aggDocs.length < 1) {
     energyDocs.forEach(doc => {
-      aggSeries(doc.dataseries)
+      const agg = aggregateSeries(doc)
+      saveAggregations(client, agg)
     })
   }
 }
