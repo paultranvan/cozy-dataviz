@@ -5,8 +5,14 @@ import Graph from 'components/Graph'
 const App = () => {
   return (
     <div align="center">
-      <h1>Energy consumption</h1>
-      <Graph dataType="electricity" aggregationLevel="byYear" />
+      <div>
+        <h1>Energy consumption</h1>
+        <Graph dataType="electricity" aggregationLevel="byYear" />
+      </div>
+      <div>
+        <h1>Gas consumption</h1>
+        <Graph dataType="gas" aggregationLevel="byYear" />
+      </div>
     </div>
   )
 }
