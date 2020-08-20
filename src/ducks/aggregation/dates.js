@@ -1,13 +1,12 @@
 import { AGG_BY_DAY, AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR } from './consts'
 import {
   parseISO,
-  formatISO,
   startOfWeek,
   startOfMonth,
   startOfYear,
-  lastDayOfWeek,
-  lastDayOfMonth,
-  lastDayOfYear
+  endOfWeek,
+  endOfMonth,
+  endOfYear
 } from 'date-fns'
 
 export const decreaseAggregationLevel = aggregationLevel => {
@@ -46,44 +45,41 @@ export const increaseAggregationLevel = aggregationLevel => {
   throw new Error('Aggregation level not known')
 }
 
-export const increaseAggregationDate = (date, aggregationLevel) => {
+export const getFirstIncreasedAggregationDate = (date, newAggLevel) => {
   date = parseISO(date)
-  if (aggregationLevel === AGG_BY_DAY) {
-    return formatISO(startOfWeek(date))
+  if (newAggLevel === AGG_BY_DAY) {
+    return new Date(startOfWeek(date)).toISOString()
   }
-  if (aggregationLevel === AGG_BY_WEEK) {
-    return formatISO(startOfMonth(date))
+  if (newAggLevel === AGG_BY_WEEK) {
+    return new Date(startOfMonth(date)).toISOString()
   }
-  if (aggregationLevel === AGG_BY_MONTH) {
+  if (newAggLevel === AGG_BY_MONTH) {
+    return new Date(startOfYear(date)).toISOString()
+  }
+  if (newAggLevel === AGG_BY_YEAR) {
     // Special case: we want all the years
     return null
-  }
-  if (aggregationLevel === AGG_BY_YEAR) {
-    throw new Error(
-      'Aggregation by year is the maximal supported granularity yet.'
-    )
   }
   throw new Error('Aggregation level not known')
 }
 
-export const getLastAggregationDate = (date, aggregationLevel) => {
+export const getLastIncreasedAggregationDate = (date, newAggLevel) => {
   if (!date) {
     return null
   }
   date = parseISO(date)
-  if (aggregationLevel === AGG_BY_DAY) {
-    throw new Error(
-      'Aggregation by day is the minimal supported granularity yet.'
-    )
+  if (newAggLevel === AGG_BY_DAY) {
+    return new Date(endOfWeek(date)).toISOString()
   }
-  if (aggregationLevel === AGG_BY_WEEK) {
-    return formatISO(lastDayOfWeek(date))
+  if (newAggLevel === AGG_BY_WEEK) {
+    return new Date(endOfMonth(date)).toISOString()
   }
-  if (aggregationLevel === AGG_BY_MONTH) {
-    return formatISO(lastDayOfMonth(date))
+  if (newAggLevel === AGG_BY_MONTH) {
+    return new Date(endOfYear(date)).toISOString()
   }
-  if (aggregationLevel === AGG_BY_YEAR) {
-    return formatISO(lastDayOfYear(date))
+  if (newAggLevel === AGG_BY_YEAR) {
+    // Special case: we want all the years
+    return null
   }
   throw new Error('Aggregation level not known')
 }

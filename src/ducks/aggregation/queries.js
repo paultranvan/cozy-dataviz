@@ -1,4 +1,5 @@
 import { useQuery, Q } from 'cozy-client'
+import log from 'cozy-logger'
 
 const dateRangeQuery = (startDate, endDate) => {
   return endDate
@@ -28,8 +29,10 @@ export const QueryTimeSerie = ({
   startDate,
   endDate
 }) => {
-  console.log(`query with ${type} - ${aggregationLevel}`)
-
+  log(
+    'info',
+    `query with ${type} - ${aggregationLevel} from ${startDate} to ${endDate}`
+  )
   const queryDef = buildQueryDefinition(
     type,
     aggregationLevel,
