@@ -12,15 +12,19 @@ const dateRangeQuery = (startDate, endDate) => {
       }
 }
 
+/*
+  The sort order is important for performances: the date must at the end
+  so the range evaluation is performed on [type, agg] sorted data.
+*/
 const buildQueryDefinition = (type, aggregationLevel, startDate, endDate) => {
   return Q('io.cozy.timeseries')
     .select(['date', 'sum', 'count'])
     .where({
-      date: dateRangeQuery(startDate, endDate),
       type: type,
-      aggregationLevel: aggregationLevel
+      aggregationLevel: aggregationLevel,
+      date: dateRangeQuery(startDate, endDate)
     })
-    .sortBy([{ date: 'asc' }])
+    .sortBy([{ type: 'asc' }, { aggregationLevel: 'asc' }, { date: 'asc' }])
 }
 
 export const QueryTimeSerie = ({
