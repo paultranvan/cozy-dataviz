@@ -70,7 +70,7 @@ const applyAggregation = (dataseries, aggLevel, dbSource, dataSource) => {
     let currDateAgg = parseISO(dataseries.dates[0])
     for (let i = 0; i < serie.values.length; i++) {
       if (compareIntervalFct(parseISO(dataseries.dates[i]), currDateAgg) > 0) {
-        aggSerie[formatISO(currDateAgg)] = {
+        aggSerie[new Date(currDateAgg).toISOString()] = {
           sum,
           count,
           type: serie.type,
@@ -105,57 +105,76 @@ const aggregateSeries = doc => {
   )
 }
 
+// TODO: this might be simplified / splitted in functions
+// to avoid multiples loops
 const saveAggregations = async (client, aggregatedSeries) => {
   console.log('aggs : ', aggregatedSeries)
-  aggregatedSeries.forEach(singleAggregationSeries => {
-    singleAggregationSeries.forEach(singleAgg => {
-      const dates = Object.keys(singleAgg)
-      dates.map(date => {
-        const docAgg = {
-          date,
-          ...singleAgg[date]
+    aggregatedSeries.forEach(singleAggregationSeries => {
+      singleAggregationSeries.forEach(async singleAgg => {
+        const dates = Object.keys(singleAgg)
+        if (dates.length > 0) {
+          try {
+            const docs = dates.map( date => {
+              return {
+                date,
+                ...singleAgg[date]
+              }
+            })
+            await client.stackClient.collection('io.cozy.timeseries').updateAll(docs)
+          } catch (err) {
+            console.error(err)
+          }
         }
-        client.save({
-          _type: 'io.cozy.timeseries',
-          ...docAgg
-        })
       })
     })
-  })
+
 }
 
 const main = async () => {
   const client = CozyClient.fromEnv()
-  console.log('hello world')
 
-  const energyQ = client.find('io.cozy.timeseries.fr.edf').where({
+  const edfQ = client.find('io.cozy.timeseries.fr.edf').where({
     'cozyMetadata.updatedAt': {
       $gt: null
     }
   })
 
-  const energyDocs = await client.queryAll(energyQ)
-  console.log('elec : ', energyDocs)
+  const enedisQ = client.find('io.cozy.timeseries.fr.enedis').where({
+    'cozyMetadata.updatedAt': {
+      $gt: null
+    }
+  })
+
+  const edfDocs = await client.queryAll(edfQ)
+  const enedisDocs = await client.queryAll(enedisQ)
+  console.log('edf : ', edfDocs)
+  console.log('enedis : ', enedisDocs)
 
   const aggDocsQ = client.find('io.cozy.timeseries').where({
     source: 'fr.edf',
     date: {
       $and: [
         {
-          $gt: energyDocs[0].dataseries.startDate
+          $gt: edfDocs[0].dataseries.startDate
         },
         {
-          $lt: energyDocs[energyDocs.length - 1].dataseries.endDate
+          $lt: edfDocs[edfDocs.length - 1].dataseries.endDate
         }
       ]
     }
   })
 
   const aggDocs = await client.queryAll(aggDocsQ)
+
+  // TODO: deal with updates
   if (aggDocs.length < 1) {
-    energyDocs.forEach(doc => {
-      const agg = aggregateSeries(doc)
-      saveAggregations(client, agg)
+    edfDocs.forEach(doc => {
+      const aggregations = aggregateSeries(doc)
+      saveAggregations(client, aggregations)
+    })
+    enedisDocs.forEach(doc => {
+      const aggregations = aggregateSeries(doc)
+      saveAggregations(client, aggregations)
     })
   }
 }
