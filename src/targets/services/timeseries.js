@@ -30,10 +30,10 @@ const mapAggregationLevelToFunc = {
     - the start / end dates interval is less than a day, OR
     - the start / second dates interval is 1 (suppose completeness)
 */
-const minAggregationLevel = dataseries => {
-  const startDate = parseISO(dataseries.startDate)
-  const endDate = parseISO(dataseries.endDate)
-  const secondDate = parseISO(dataseries.dates[1])
+const minAggregationLevel = dataserie => {
+  const startDate = parseISO(dataserie.startDate)
+  const endDate = parseISO(dataserie.endDate)
+  const secondDate = parseISO(dataserie.dates[1])
 
   if (
     differenceInCalendarDays(endDate, startDate) < 1 ||
@@ -60,40 +60,41 @@ const minAggregationLevel = dataseries => {
   Apply aggregation functions on data series. The given interval function
   is used to determine how to group data: per week, month, etc.
 */
-const applyAggregation = (dataseries, aggLevel, dbSource, dataSource) => {
+const applyAggregation = (dataserie, aggLevel, dbSource, dataSource) => {
   const compareIntervalFct = mapAggregationLevelToFunc[aggLevel]
-  console.log('compare interval fct : ', compareIntervalFct)
-  return dataseries.series.map(serie => {
-    const aggSerie = {}
-    let sum = 0
-    let count = 0
-    let currDateAgg = parseISO(dataseries.dates[0])
-    for (let i = 0; i < serie.values.length; i++) {
-      if (compareIntervalFct(parseISO(dataseries.dates[i]), currDateAgg) > 0) {
-        aggSerie[new Date(currDateAgg).toISOString()] = {
-          sum,
-          count,
-          type: serie.type,
-          aggregationLevel: aggLevel,
-          dbSource,
-          dataSource
-        }
-        sum = 0
-        count = 0
-        currDateAgg = parseISO(dataseries.dates[i])
+  const aggSerie = {}
+  let sum = dataserie.values[0]
+  let count = 1
+  let currDateAgg = parseISO(dataserie.dates[0])
+
+  for (let i = 0; i < dataserie.dates.length; i++) {
+    if (compareIntervalFct(parseISO(dataserie.dates[i]), currDateAgg) > 0) {
+      aggSerie[new Date(currDateAgg).toISOString()] = {
+        sum,
+        count,
+        type: dataserie.type,
+        aggregationLevel: aggLevel,
+        dbSource,
+        dataSource
       }
-      sum += serie.values[i]
+      sum = dataserie.values[i]
+      count = 1
+      currDateAgg = parseISO(dataserie.dates[i])
+    } else {
+      sum += dataserie.values[i]
       count++
     }
-    return aggSerie
-  })
+  }
+  return aggSerie
 }
 
 /*
   Aggregate data series on the computed times intervals
 */
 const aggregateSeries = doc => {
-  const minAggLevel = minAggregationLevel(doc.dataseries)
+  // TODO: change this: should return the values to aggregate for each agg level
+  // in order to support irregulate data (such as running sessions records)
+  const minAggLevel = minAggregationLevel(doc.dataserie)
   const aggregationRuns = {
     [AGG_BY_DAY]: [AGG_BY_DAY, AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR],
     [AGG_BY_WEEK]: [AGG_BY_WEEK, AGG_BY_MONTH, AGG_BY_YEAR],
@@ -101,43 +102,56 @@ const aggregateSeries = doc => {
     [AGG_BY_YEAR]: AGG_BY_YEAR
   }
   return aggregationRuns[minAggLevel].map(aggLevel =>
-    applyAggregation(doc.dataseries, aggLevel, doc.dbSource, doc.dataSource)
+    applyAggregation(doc.dataserie, aggLevel, doc.dbSource, doc.dataSource)
   )
 }
 
-// TODO: this might be simplified / splitted in functions
-// to avoid multiples loops
 const saveAggregations = async (client, aggregatedSeries) => {
-  console.log('aggs : ', aggregatedSeries)
-    aggregatedSeries.forEach(singleAggregationSeries => {
-      singleAggregationSeries.forEach(async singleAgg => {
-        const dates = Object.keys(singleAgg)
-        if (dates.length > 0) {
-          try {
-            const docs = dates.map( date => {
-              return {
-                date,
-                ...singleAgg[date]
-              }
-            })
-            await client.stackClient.collection('io.cozy.timeseries').updateAll(docs)
-          } catch (err) {
-            console.error(err)
+  aggregatedSeries.forEach(async aggSerie => {
+    const dates = Object.keys(aggSerie)
+    if (dates.length > 0) {
+      try {
+        const docs = dates.map(date => {
+          return {
+            date,
+            ...aggSerie[date]
           }
-        }
-      })
-    })
-
+        })
+        await client.stackClient
+          .collection('io.cozy.timeseries')
+          .updateAll(docs)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  })
 }
 
 const main = async () => {
   const client = CozyClient.fromEnv()
 
-  const edfQ = client.find('io.cozy.timeseries.fr.edf').where({
-    'cozyMetadata.updatedAt': {
-      $gt: null
-    }
-  })
+  const edfQ = client
+    .find('io.cozy.timeseries.fr.edf')
+    .where({
+      $and: [
+        {
+          'cozyMetadata.updatedAt': {
+            $gt: null
+          }
+        },
+        {
+          $or: [
+            {
+              'dataserie.type': 'electricity'
+            },
+            {
+              'dataserie.type': 'gas'
+            }
+          ]
+        }
+      ]
+    })
+  .indexFields(['cozyMetadata.updatedAt', 'dataserie.type'])
 
   const enedisQ = client.find('io.cozy.timeseries.fr.enedis').where({
     'cozyMetadata.updatedAt': {
@@ -150,15 +164,17 @@ const main = async () => {
   console.log('edf : ', edfDocs)
   console.log('enedis : ', enedisDocs)
 
+  // Here, we suppose the docs are sorted on the dataserie dates,
+  // which is not always the case
   const aggDocsQ = client.find('io.cozy.timeseries').where({
-    source: 'fr.edf',
+    dbSource: 'io.cozy.timeseries.fr.edf', //TODO support enedis
     date: {
       $and: [
         {
-          $gt: edfDocs[0].dataseries.startDate
+          $gt: edfDocs[0].dataserie.startDate
         },
         {
-          $lt: edfDocs[edfDocs.length - 1].dataseries.endDate
+          $lt: edfDocs[edfDocs.length - 1].dataserie.endDate
         }
       ]
     }
@@ -176,6 +192,8 @@ const main = async () => {
       const aggregations = aggregateSeries(doc)
       saveAggregations(client, aggregations)
     })
+  } else {
+    console.log(`${aggDocs.length} docs retrieved`)
   }
 }
 
